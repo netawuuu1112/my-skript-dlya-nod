@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+DIR=/opt/remnanode
+
+c(){ printf '\033[1;36m%s\033[0m\n' "$*"; }
+g(){ printf '\033[1;32m%s\033[0m\n' "$*"; }
+y(){ printf '\033[1;33m%s\033[0m\n' "$*"; }
+r(){ printf '\033[1;31m%s\033[0m\n' "$*"; }
+
+need_root(){ [[ $EUID -eq 0 ]] || { r 'Нужен root'; exit 1; }; }
+need_node(){ [[ -f "$DIR/docker-compose.yml" ]] || { r "$DIR/docker-compose.yml не найден"; exit 1; }; }
+
+status(){
+  need_node
+  c '=== CONTAINERS ==='
+  docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+  c '=== VERSIONS ==='
+  docker logs remnanode 2>&1 | grep -aE 'SECRET_KEY OK|Remnawave Node v|XRay Core:' | tail -10 || true
+  c '=== PORTS ==='
+  ss -lntp | grep -E '(:2222|:443|:80)' || true
+  c '=== UFW ==='
+  ufw status || true
+}
+
+restart(){ need_root; need_node; cd "$DIR"; docker compose restart remnanode; sleep 8; status; }
+logs(){ need_node; docker logs --tail="${2:-120}" -f remnanode; }
+
+keys(){
+  need_node
+  c '=== REALITY X25519 ==='
+  docker exec remnanode /usr/local/bin/xray x25519
+  c '=== SHORT ID ==='
+  printf 'ShortID: '; openssl rand -hex 8
+}
+
+update(){
+  need_root; need_node; cd "$DIR"
+  cp docker-compose.yml "docker-compose.yml.backup-update-$(date +%F-%H%M%S)"
+  c '=== PULL ==='
+  docker compose pull
+  c '=== RECREATE ==='
+  docker compose up -d --remove-orphans --force-recreate
+  sleep 10
+  status
+}
+
+doctor(){
+  need_root; need_node
+  c '=== HOST ==='
+  printf 'Public IPv4: '; curl -4fsS --connect-timeout 5 --max-time 10 https://api.ipify.org || true; echo
+  printf 'Kernel: '; uname -r
+  printf 'OS: '; . /etc/os-release; echo "${PRETTY_NAME:-unknown}"
+
+  c '=== COMPOSE ==='
+  cd "$DIR"
+  docker compose config >/dev/null && g 'compose: OK' || r 'compose: INVALID'
+  grep -nE 'image:|NODE_PORT=' docker-compose.yml || true
+
+  c '=== NODE ENV ==='
+  docker inspect remnanode --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null \
+   | grep -E 'NODE_PORT=|SECRET_KEY=' | sed -E 's#(SECRET_KEY=).*#\1***HIDDEN***#' || true
+
+  c '=== VERSIONS / SECRET ==='
+  docker logs remnanode 2>&1 | grep -aE 'SECRET_KEY|Remnawave Node v|XRay Core:' | tail -20 || true
+
+  c '=== PORTS ==='
+  ss -lntp | grep -E '(:2222|:443|:80)' || true
+
+  c '=== FIREWALL ==='
+  ufw status || true
+
+  c '=== ROUTING ==='
+  ip route
+  ip rule
+
+  c '=== NFT REMNANODE ==='
+  nft list table ip remnanode 2>/dev/null || y 'remnanode nft table отсутствует/ещё не создана'
+
+  c '=== RECENT NODE LOGS ==='
+  docker logs --tail=100 remnanode 2>&1 || true
+
+  y 'Подсказка: 2222=rw-node обязателен. 443=rw-core появляется после того, как панель подключилась и передала Xray config.'
+  y 'Чтобы проверить реальный приход панели: timeout 20 tcpdump -ni any tcp port 2222'
+}
+
+case "${1:-}" in
+  status) status ;;
+  restart) restart ;;
+  logs) logs "$@" ;;
+  keys) keys ;;
+  update) update ;;
+  doctor) doctor ;;
+  *)
+    cat <<USAGE
+Kosmo Node helper
+  kosmo-node status   - версии, контейнеры, порты
+  kosmo-node restart  - рестарт Node и проверка
+  kosmo-node logs     - live logs
+  kosmo-node keys     - новый Reality keypair + ShortID
+  kosmo-node update   - pull + force recreate всех сервисов
+  kosmo-node doctor   - расширенная диагностика
+USAGE
+    ;;
+esac
