@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 DIR=/opt/remnanode
-SHARE=/usr/local/share/kosmo-node
 
 c(){ printf '\033[1;36m%s\033[0m\n' "$*"; }
 g(){ printf '\033[1;32m%s\033[0m\n' "$*"; }
@@ -27,13 +26,9 @@ restart(){ need_root; need_node; cd "$DIR"; docker compose restart remnanode; sl
 logs(){ need_node; docker logs --tail="${2:-120}" -f remnanode; }
 
 xray_bin(){
-  if docker exec remnanode test -x /usr/local/bin/xray >/dev/null 2>&1; then
-    echo '/usr/local/bin/xray'
-  elif docker exec remnanode test -x /usr/bin/xray >/dev/null 2>&1; then
-    echo '/usr/bin/xray'
-  else
-    r 'Xray binary внутри remnanode не найден'; exit 1
-  fi
+  if docker exec remnanode test -x /usr/local/bin/xray >/dev/null 2>&1; then echo '/usr/local/bin/xray';
+  elif docker exec remnanode test -x /usr/bin/xray >/dev/null 2>&1; then echo '/usr/bin/xray';
+  else r 'Xray binary внутри remnanode не найден'; exit 1; fi
 }
 
 keypair(){
@@ -50,8 +45,7 @@ keypair(){
 
 keys(){
   local vals priv pub sid
-  vals=$(keypair)
-  priv=$(sed -n '1p' <<<"$vals"); pub=$(sed -n '2p' <<<"$vals"); sid=$(sed -n '3p' <<<"$vals")
+  vals=$(keypair); priv=$(sed -n '1p' <<<"$vals"); pub=$(sed -n '2p' <<<"$vals"); sid=$(sed -n '3p' <<<"$vals")
   c '=== REALITY X25519 ==='
   printf 'PrivateKey: %s\nPublicKey/Password: %s\nShortID: %s\n' "$priv" "$pub" "$sid"
 }
@@ -68,10 +62,8 @@ profile(){
   local domain vals priv pub sid outdir outfile xport rport
   domain=$(node_domain)
   [[ -n "$domain" ]] || { r 'Не удалось определить домен из /opt/remnanode/nginx.conf'; exit 1; }
-  vals=$(keypair)
-  priv=$(sed -n '1p' <<<"$vals"); pub=$(sed -n '2p' <<<"$vals"); sid=$(sed -n '3p' <<<"$vals")
-  path=${path:-/$(openssl rand -hex 8)}
-  [[ "$path" == /* ]] || path="/$path"
+  vals=$(keypair); priv=$(sed -n '1p' <<<"$vals"); pub=$(sed -n '2p' <<<"$vals"); sid=$(sed -n '3p' <<<"$vals")
+  path=${path:-/$(openssl rand -hex 8)}; [[ "$path" == /* ]] || path="/$path"
   outdir="$DIR/generated-profiles"; mkdir -p "$outdir"
 
   if [[ "$mode" == xhttp ]]; then
@@ -79,7 +71,7 @@ profile(){
     python3 - "$outfile" "$tag" "$port" "$domain" "$sni" "$path" "$priv" "$sid" <<'PY'
 import json,sys
 f,tag,port,domain,sni,path,priv,sid=sys.argv[1:]
-obj={"log":{"loglevel":"warning"},"dns":{"servers":["1.1.1.1","8.8.8.8"],"queryStrategy":"UseIPv4"},"inbounds":[{"tag":tag,"listen":"0.0.0.0","port":int(port),"protocol":"vless","settings":{"clients":[],"decryption":"none"},"sniffing":{"enabled":True,"routeOnly":True,"destOverride":["http","tls","quic"]},"streamSettings":{"network":"xhttp","security":"reality","xhttpSettings":{"host":domain,"mode":"auto","path":path},"realitySettings":{"target":"/dev/shm/nginx.sock","show":False,"xver":1,"shortIds":[sid],"privateKey":priv,"serverNames":[sni],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}}}],"outbounds":[{"tag":"DIRECT","protocol":"freedom","settings":{"domainStrategy":"UseIPv4"}},{"tag":"BLOCK","protocol":"blackhole"}],"routing":{"rules":[],"domainStrategy":"IPIfNonMatch"}}
+obj={"log":{"loglevel":"warning"},"dns":{"servers":["1.1.1.1","8.8.8.8"],"queryStrategy":"UseIPv4"},"inbounds":[{"tag":tag,"listen":"0.0.0.0","port":int(port),"protocol":"vless","settings":{"clients":[],"decryption":"none"},"sniffing":{"enabled":True,"routeOnly":True,"destOverride":["http","tls","quic"]},"streamSettings":{"network":"xhttp","security":"reality","xhttpSettings":{"host":domain,"mode":"auto","path":path},"realitySettings":{"dest":"/dev/shm/nginx.sock","show":False,"xver":1,"spiderX":"","shortIds":[sid],"privateKey":priv,"serverNames":[sni],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}}}],"outbounds":[{"tag":"DIRECT","protocol":"freedom","settings":{"domainStrategy":"UseIPv4"}},{"tag":"BLOCK","protocol":"blackhole"}],"routing":{"rules":[],"domainStrategy":"IPIfNonMatch"}}
 open(f,'w').write(json.dumps(obj,ensure_ascii=False,indent=2)+"\n")
 PY
     ufw allow "$port"/tcp comment 'Kosmo XHTTP Reality' >/dev/null 2>&1 || true
@@ -91,7 +83,7 @@ PY
     python3 - "$outfile" "$tag" "$port" "$sni" "$priv" "$sid" <<'PY'
 import json,sys
 f,tag,port,sni,priv,sid=sys.argv[1:]
-obj={"log":{"loglevel":"warning"},"dns":{"servers":["1.1.1.1","8.8.8.8"],"queryStrategy":"UseIPv4"},"inbounds":[{"tag":tag,"listen":"0.0.0.0","port":int(port),"protocol":"vless","settings":{"clients":[],"flow":"xtls-rprx-vision","decryption":"none"},"sniffing":{"enabled":True,"routeOnly":True,"destOverride":["http","tls","quic"]},"streamSettings":{"network":"raw","security":"reality","realitySettings":{"target":sni+":443","show":False,"xver":0,"shortIds":[sid],"privateKey":priv,"serverNames":[sni],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}}}],"outbounds":[{"tag":"DIRECT","protocol":"freedom","settings":{"domainStrategy":"UseIPv4"}},{"tag":"BLOCK","protocol":"blackhole"}],"routing":{"rules":[],"domainStrategy":"IPIfNonMatch"}}
+obj={"log":{"loglevel":"warning"},"dns":{"servers":["1.1.1.1","8.8.8.8"],"queryStrategy":"UseIPv4"},"inbounds":[{"tag":tag,"listen":"0.0.0.0","port":int(port),"protocol":"vless","settings":{"clients":[],"flow":"xtls-rprx-vision","decryption":"none"},"sniffing":{"enabled":True,"routeOnly":True,"destOverride":["http","tls","quic"]},"streamSettings":{"network":"raw","security":"reality","realitySettings":{"dest":sni+":443","show":False,"xver":0,"spiderX":"","shortIds":[sid],"privateKey":priv,"serverNames":[sni],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}}}],"outbounds":[{"tag":"DIRECT","protocol":"freedom","settings":{"domainStrategy":"UseIPv4"}},{"tag":"BLOCK","protocol":"blackhole"}],"routing":{"rules":[],"domainStrategy":"IPIfNonMatch"}}
 open(f,'w').write(json.dumps(obj,ensure_ascii=False,indent=2)+"\n")
 PY
     ufw allow "$port"/tcp comment 'Kosmo RAW Reality' >/dev/null 2>&1 || true
@@ -106,8 +98,8 @@ PY
 import json,sys
 f,tag,xp,rp,domain,sni,path,p1,s1,p2,s2=sys.argv[1:]
 common={"sniffing":{"enabled":True,"routeOnly":True,"destOverride":["http","tls","quic"]}}
-x={"tag":tag+"-XHTTP","listen":"0.0.0.0","port":int(xp),"protocol":"vless","settings":{"clients":[],"decryption":"none"},**common,"streamSettings":{"network":"xhttp","security":"reality","xhttpSettings":{"host":domain,"mode":"auto","path":path},"realitySettings":{"target":"/dev/shm/nginx.sock","show":False,"xver":1,"shortIds":[s1],"privateKey":p1,"serverNames":[sni],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}}}
-r={"tag":tag+"-RAW","listen":"0.0.0.0","port":int(rp),"protocol":"vless","settings":{"clients":[],"flow":"xtls-rprx-vision","decryption":"none"},**common,"streamSettings":{"network":"raw","security":"reality","realitySettings":{"target":"max.ru:443","show":False,"xver":0,"shortIds":[s2],"privateKey":p2,"serverNames":["max.ru"],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}}}
+x={"tag":tag+"-XHTTP","listen":"0.0.0.0","port":int(xp),"protocol":"vless","settings":{"clients":[],"decryption":"none"},**common,"streamSettings":{"network":"xhttp","security":"reality","xhttpSettings":{"host":domain,"mode":"auto","path":path},"realitySettings":{"dest":"/dev/shm/nginx.sock","show":False,"xver":1,"spiderX":"","shortIds":[s1],"privateKey":p1,"serverNames":[sni],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}}}
+r={"tag":tag+"-RAW","listen":"0.0.0.0","port":int(rp),"protocol":"vless","settings":{"clients":[],"flow":"xtls-rprx-vision","decryption":"none"},**common,"streamSettings":{"network":"raw","security":"reality","realitySettings":{"dest":"max.ru:443","show":False,"xver":0,"spiderX":"","shortIds":[s2],"privateKey":p2,"serverNames":["max.ru"],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}}}
 obj={"log":{"loglevel":"warning"},"dns":{"servers":["1.1.1.1","8.8.8.8"],"queryStrategy":"UseIPv4"},"inbounds":[x,r],"outbounds":[{"tag":"DIRECT","protocol":"freedom","settings":{"domainStrategy":"UseIPv4"}},{"tag":"BLOCK","protocol":"blackhole"}],"routing":{"rules":[],"domainStrategy":"IPIfNonMatch"}}
 open(f,'w').write(json.dumps(obj,ensure_ascii=False,indent=2)+"\n")
 PY
@@ -117,23 +109,14 @@ PY
     printf 'Config Profile: %s\n\nXHTTP Host: %s:%s | SNI=%s | fp=qq | path=%s | mode=auto | flow=<empty> | pbk=%s | sid=%s\nRAW Host:   %s:%s | SNI=max.ru | fp=qq | flow=xtls-rprx-vision | pbk=%s | sid=%s\n' "$outfile" "$domain" "$xport" "$sni" "$path" "$pub" "$sid" "$domain" "$rport" "$pub2" "$sid2"
   fi
   ufw reload >/dev/null 2>&1 || true
-  g 'Готово. JSON нужно вставить в Config Profile Remnawave; затем создать Host(ы) по напечатанным параметрам.'
+  g 'Готово. JSON вставь в Config Profile Remnawave, затем создай Host(ы) по напечатанным параметрам.'
 }
 
-update(){
-  need_root; need_node; cd "$DIR"
-  cp docker-compose.yml "docker-compose.yml.backup-update-$(date +%F-%H%M%S)"
-  c '=== PULL ==='; docker compose pull
-  c '=== RECREATE ==='; docker compose up -d --remove-orphans --force-recreate
-  sleep 10; status
-}
+update(){ need_root; need_node; cd "$DIR"; cp docker-compose.yml "docker-compose.yml.backup-update-$(date +%F-%H%M%S)"; c '=== PULL ==='; docker compose pull; c '=== RECREATE ==='; docker compose up -d --remove-orphans --force-recreate; sleep 10; status; }
 
 doctor(){
   need_root; need_node
-  c '=== HOST ==='
-  printf 'Public IPv4: '; curl -4fsS --connect-timeout 5 --max-time 10 https://api.ipify.org || true; echo
-  printf 'Kernel: '; uname -r
-  printf 'OS: '; . /etc/os-release; echo "${PRETTY_NAME:-unknown}"
+  c '=== HOST ==='; printf 'Public IPv4: '; curl -4fsS --connect-timeout 5 --max-time 10 https://api.ipify.org || true; echo; printf 'Kernel: '; uname -r; printf 'OS: '; . /etc/os-release; echo "${PRETTY_NAME:-unknown}"
   c '=== COMPOSE ==='; cd "$DIR"; docker compose config >/dev/null && g 'compose: OK' || r 'compose: INVALID'; grep -nE 'image:|NODE_PORT=' docker-compose.yml || true
   c '=== NODE ENV ==='; docker inspect remnanode --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E 'NODE_PORT=|SECRET_KEY=' | sed -E 's#(SECRET_KEY=).*#\1***HIDDEN***#' || true
   c '=== VERSIONS / SECRET ==='; docker logs remnanode 2>&1 | grep -aE 'SECRET_KEY|Remnawave Node v|XRay Core:' | tail -20 || true
@@ -154,18 +137,17 @@ case "${1:-}" in
   profile) profile "$@" ;;
   update) update ;;
   doctor) doctor ;;
-  *)
-    cat <<USAGE
+  *) cat <<USAGE
 Kosmo Node helper
-  kosmo-node status                         - версии, контейнеры, порты
-  kosmo-node restart                        - рестарт Node и проверка
-  kosmo-node logs [N]                       - live logs
-  kosmo-node keys                           - Reality keypair + ShortID
+  kosmo-node status
+  kosmo-node restart
+  kosmo-node logs [N]
+  kosmo-node keys
   kosmo-node profile xhttp [TAG] [PORT] [SNI] [PATH]
   kosmo-node profile raw   [TAG] [PORT] [SNI]
   kosmo-node profile both  [TAG] [XHTTP_PORT] [XHTTP_SNI] [PATH]
-  kosmo-node update                         - pull + force recreate
-  kosmo-node doctor                         - расширенная диагностика
+  kosmo-node update
+  kosmo-node doctor
 USAGE
-    ;;
+  ;;
 esac
