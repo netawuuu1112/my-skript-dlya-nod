@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-KOSMO_VERSION="1.1.0"
+KOSMO_VERSION="1.2.0"
 UPSTREAM="https://raw.githubusercontent.com/eGamesAPI/remnawave-reverse-proxy/refs/heads/main/install_remnawave.sh"
 BASE_DIR="/usr/local/remnawave_reverse"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,7 +21,7 @@ command -v curl >/dev/null 2>&1 || { apt-get update -y && apt-get install -y cur
 [[ -f "$SCRIPT_DIR/bin/kosmo-node" ]] || { red "Не найден bin/kosmo-node. Запускай installer из полного клона репозитория."; exit 1; }
 
 info "Kosmo Remnawave Node bootstrap v$KOSMO_VERSION"
-info "Основа: актуальный eGamesAPI/remnawave-reverse-proxy + усиленный модуль Node + генератор современных Xray профилей"
+info "Основа: актуальный eGamesAPI/remnawave-reverse-proxy + усиленный Node-модуль + мастер XHTTP/RAW профилей"
 
 mkdir -p "$MODULE_DIR" /usr/local/bin /usr/local/share/kosmo-node
 
@@ -44,11 +44,11 @@ UPSTREAM_VERSION=${UPSTREAM_VER:-unknown}
 UPSTREAM_SHA256=$UPSTREAM_SHA
 INSTALLED_AT=$(date -u +%FT%TZ)
 PROFILE_GENERATOR=xhttp,raw,both
+POST_INSTALL_WIZARD=enabled
 INFO
 
 green "Bootstrap готов. Запускаю официальный интерфейс eGames с нашим Node-модулем."
 yellow "Для отдельной ноды выбирай: Install Remnawave Components -> Install node only -> Nginx."
-yellow "После успешной установки Node можно сгенерировать профиль: kosmo-node profile xhttp"
-yellow "Альтернативы: kosmo-node profile raw | kosmo-node profile both"
+yellow "После установки Node мастер автоматически предложит XHTTP / RAW / XHTTP+RAW и создаст готовый Config Profile для Remnawave."
 echo
 exec "$BASE_DIR/remnawave_reverse"
