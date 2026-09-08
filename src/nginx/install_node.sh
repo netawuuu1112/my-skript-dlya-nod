@@ -55,6 +55,39 @@ except Exception:
 PY
 }
 
+_kosmo_profile_wizard() {
+    echo
+    _kosmo_msg "Генератор Config Profile для Remnawave"
+    echo "  1) XHTTP + REALITY        [рекомендуется]"
+    echo "  2) RAW + REALITY + Vision [резерв/совместимость]"
+    echo "  3) XHTTP + RAW            [два inbound на одной Node]"
+    echo "  4) Пропустить"
+    echo
+    local choice=""
+    read -r -p "Выбери транспорт [1]: " choice
+    choice=${choice:-1}
+    case "$choice" in
+      1)
+        _kosmo_msg "Создаю XHTTP + REALITY профиль..."
+        kosmo-node profile xhttp
+        ;;
+      2)
+        _kosmo_msg "Создаю RAW + REALITY + Vision профиль..."
+        kosmo-node profile raw
+        ;;
+      3)
+        _kosmo_msg "Создаю dual-профиль XHTTP + RAW..."
+        kosmo-node profile both
+        ;;
+      4)
+        _kosmo_warn "Генерация пропущена. Позже: kosmo-node profile xhttp|raw|both"
+        ;;
+      *)
+        _kosmo_warn "Неизвестный выбор. Профиль не создавался. Позже: kosmo-node profile xhttp|raw|both"
+        ;;
+    esac
+}
+
 install_node_nginx() {
     load_selfsteal_templates_module
 
@@ -229,7 +262,7 @@ EOL
     cd /opt/remnanode || exit 1
     docker compose config >/dev/null || { _kosmo_err "docker-compose.yml invalid"; exit 1; }
 
-    _kosmo_msg "Принудительно скачиваю свежие Docker-образы (устраняет проблему старого cached Node 2.8.0)."
+    _kosmo_msg "Принудительно скачиваю свежие Docker-образы (устраняет проблему старого cached Node)."
     docker compose pull
     docker compose up -d --remove-orphans
 
@@ -249,9 +282,8 @@ EOL
     docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
 
     echo
-    _kosmo_warn "ВАЖНО: порт 443 у rw-core появляется только после успешного Panel -> Node подключения и передачи Xray-конфига. Его отсутствие сразу после установки не считаем ошибкой Node."
+    _kosmo_warn "ВАЖНО: 443/rw-core появляется после успешного Panel -> Node подключения и передачи Xray-конфига. Его отсутствие сразу после установки не считаем ошибкой Node."
     _kosmo_warn "Если Node остаётся Offline: kosmo-node doctor"
-    _kosmo_warn "Для Reality ключей: kosmo-node keys"
 
     printf "${COLOR_YELLOW}${LANG[NODE_CHECK]}${COLOR_RESET}\n" "$SELFSTEAL_DOMAIN"
     local max_attempts=5 attempt=1 delay=10
@@ -265,4 +297,6 @@ EOL
         sleep $delay
         ((attempt++))
     done
+
+    _kosmo_profile_wizard
 }
