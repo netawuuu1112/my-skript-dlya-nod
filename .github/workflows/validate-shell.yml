@@ -1,0 +1,18 @@
+name: Validate shell scripts
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  bash-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bash syntax check
+        run: |
+          bash -n install.sh
+          bash -n src/nginx/install_node.sh
+          bash -n bin/kosmo-node
