@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-KOSMO_VERSION="2.0.0"
+KOSMO_VERSION="2.0.1"
 NODE_DIR="/opt/remnanode"
 PROFILE_DIR="$NODE_DIR/generated-profiles"
 UPSTREAM_URL="https://raw.githubusercontent.com/eGamesAPI/remnawave-reverse-proxy/refs/heads/main/install_remnawave.sh"
@@ -43,7 +43,7 @@ panel_guard(){
   if need_cmd docker; then
     local names
     names="$(docker ps -a --format '{{.Names}}' 2>/dev/null || true)"
-    if grep -Eq '(^|\n)(remnawave|remnawave-backend|remnawave-db|remnawave-redis|remnawave-subscription-page)($|\n)' <<<"$names"; then
+    if grep -Eq '^(remnawave|remnawave-backend|remnawave-db|remnawave-redis|remnawave-subscription-page)$' <<<"$names"; then
       err "ЗАЩИТА: обнаружены контейнеры панели Remnawave. Изменяющая операция запрещена."
       return 1
     fi
@@ -87,14 +87,8 @@ reality_values(){
   printf '%s\n%s\n%s\n' "$priv" "$pub" "$sid"
 }
 
-validate_json(){
-  python3 -m json.tool "$1" >/dev/null
-}
-
-save_host_txt(){
-  local file="$1"; shift
-  printf '%s\n' "$@" > "$file"
-}
+validate_json(){ python3 -m json.tool "$1" >/dev/null; }
+save_host_txt(){ local file="$1"; shift; printf '%s\n' "$@" > "$file"; }
 
 profile_xhttp(){
   panel_guard; need_node; ensure_base_packages
@@ -107,32 +101,13 @@ profile_xhttp(){
   python3 - "$out" "$tag" "$port" "$domain" "$sni" "$path" "$priv" "$sid" <<'PY'
 import json,sys
 f,tag,port,domain,sni,path,priv,sid=sys.argv[1:]
-obj={
- "log":{"loglevel":"warning"},
- "dns":{"servers":["1.1.1.1","8.8.8.8"],"queryStrategy":"UseIPv4"},
- "inbounds":[{
-   "tag":tag,"listen":"0.0.0.0","port":int(port),"protocol":"vless",
-   "settings":{"clients":[],"decryption":"none"},
-   "sniffing":{"enabled":True,"routeOnly":True,"destOverride":["http","tls","quic"]},
-   "streamSettings":{
-     "network":"xhttp","security":"reality",
-     "xhttpSettings":{"host":domain,"mode":"auto","path":path},
-     "realitySettings":{"target":"/dev/shm/nginx.sock","show":False,"xver":1,"shortIds":[sid],"privateKey":priv,"serverNames":[sni],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}
-   }
- }],
- "outbounds":[{"tag":"DIRECT","protocol":"freedom","settings":{"domainStrategy":"UseIPv4"}},{"tag":"BLOCK","protocol":"blackhole"}],
- "routing":{"rules":[],"domainStrategy":"IPIfNonMatch"}
-}
+obj={"log":{"loglevel":"warning"},"dns":{"servers":["1.1.1.1","8.8.8.8"],"queryStrategy":"UseIPv4"},"inbounds":[{"tag":tag,"listen":"0.0.0.0","port":int(port),"protocol":"vless","settings":{"clients":[],"decryption":"none"},"sniffing":{"enabled":True,"routeOnly":True,"destOverride":["http","tls","quic"]},"streamSettings":{"network":"xhttp","security":"reality","xhttpSettings":{"host":domain,"mode":"auto","path":path},"realitySettings":{"target":"/dev/shm/nginx.sock","show":False,"xver":1,"shortIds":[sid],"privateKey":priv,"serverNames":[sni],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}}}],"outbounds":[{"tag":"DIRECT","protocol":"freedom","settings":{"domainStrategy":"UseIPv4"}},{"tag":"BLOCK","protocol":"blackhole"}],"routing":{"rules":[],"domainStrategy":"IPIfNonMatch"}}
 open(f,'w').write(json.dumps(obj,ensure_ascii=False,indent=2)+"\n")
 PY
   validate_json "$out"
-  save_host_txt "$host" \
-    "Address: $domain" "Port: $port" "Protocol: VLESS" "Network: xhttp" "Security: reality" \
-    "SNI: $sni" "Fingerprint: qq" "Path: $path" "Mode: auto" "Flow: <empty>" \
-    "PublicKey/Password: $pub" "ShortID: $sid"
+  save_host_txt "$host" "Address: $domain" "Port: $port" "Protocol: VLESS" "Network: xhttp" "Security: reality" "SNI: $sni" "Fingerprint: qq" "Path: $path" "Mode: auto" "Flow: <empty>" "PublicKey/Password: $pub" "ShortID: $sid"
   if need_cmd ufw; then ufw allow "$port"/tcp comment 'Kosmo XHTTP Reality' >/dev/null 2>&1 || true; ufw reload >/dev/null 2>&1 || true; fi
-  ok "XHTTP профиль создан: $out"
-  cat "$host"
+  ok "XHTTP профиль создан: $out"; cat "$host"
 }
 
 profile_raw(){
@@ -144,30 +119,13 @@ profile_raw(){
   python3 - "$out" "$tag" "$port" "$sni" "$priv" "$sid" <<'PY'
 import json,sys
 f,tag,port,sni,priv,sid=sys.argv[1:]
-obj={
- "log":{"loglevel":"warning"},
- "dns":{"servers":["1.1.1.1","8.8.8.8"],"queryStrategy":"UseIPv4"},
- "inbounds":[{
-   "tag":tag,"listen":"0.0.0.0","port":int(port),"protocol":"vless",
-   "settings":{"clients":[],"decryption":"none"},
-   "sniffing":{"enabled":True,"routeOnly":True,"destOverride":["http","tls","quic"]},
-   "streamSettings":{
-     "network":"raw","security":"reality",
-     "realitySettings":{"target":sni+":443","show":False,"xver":0,"shortIds":[sid],"privateKey":priv,"serverNames":[sni],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}
-   }
- }],
- "outbounds":[{"tag":"DIRECT","protocol":"freedom","settings":{"domainStrategy":"UseIPv4"}},{"tag":"BLOCK","protocol":"blackhole"}],
- "routing":{"rules":[],"domainStrategy":"IPIfNonMatch"}
-}
+obj={"log":{"loglevel":"warning"},"dns":{"servers":["1.1.1.1","8.8.8.8"],"queryStrategy":"UseIPv4"},"inbounds":[{"tag":tag,"listen":"0.0.0.0","port":int(port),"protocol":"vless","settings":{"clients":[],"decryption":"none"},"sniffing":{"enabled":True,"routeOnly":True,"destOverride":["http","tls","quic"]},"streamSettings":{"network":"raw","security":"reality","realitySettings":{"target":sni+":443","show":False,"xver":0,"shortIds":[sid],"privateKey":priv,"serverNames":[sni],"maxTimeDiff":0,"minClientVer":"1.8.0","maxClientVer":""}}}],"outbounds":[{"tag":"DIRECT","protocol":"freedom","settings":{"domainStrategy":"UseIPv4"}},{"tag":"BLOCK","protocol":"blackhole"}],"routing":{"rules":[],"domainStrategy":"IPIfNonMatch"}}
 open(f,'w').write(json.dumps(obj,ensure_ascii=False,indent=2)+"\n")
 PY
   validate_json "$out"
-  save_host_txt "$host" \
-    "Address: $domain" "Port: $port" "Protocol: VLESS" "Network: raw" "Security: reality" \
-    "SNI: $sni" "Fingerprint: qq" "Flow: xtls-rprx-vision" "PublicKey/Password: $pub" "ShortID: $sid"
+  save_host_txt "$host" "Address: $domain" "Port: $port" "Protocol: VLESS" "Network: raw" "Security: reality" "SNI: $sni" "Fingerprint: qq" "Flow: xtls-rprx-vision" "PublicKey/Password: $pub" "ShortID: $sid"
   if need_cmd ufw; then ufw allow "$port"/tcp comment 'Kosmo RAW Reality' >/dev/null 2>&1 || true; ufw reload >/dev/null 2>&1 || true; fi
-  ok "RAW профиль создан: $out"
-  cat "$host"
+  ok "RAW профиль создан: $out"; cat "$host"
 }
 
 profile_both(){
@@ -179,9 +137,7 @@ profile_both(){
 import json,sys
 x=json.load(open(sys.argv[1])); r=json.load(open(sys.argv[2])); x['inbounds'].extend(r['inbounds']); open(sys.argv[3],'w').write(json.dumps(x,ensure_ascii=False,indent=2)+"\n")
 PY
-  validate_json "$out"
-  ok "Комбинированный профиль создан: $out"
-  warn "Используй именно xhttp-raw-reality.json в Remnawave, а два отдельных файла оставлены как справочные."
+  validate_json "$out"; ok "Комбинированный профиль создан: $out"; warn "В Remnawave используй xhttp-raw-reality.json."
 }
 
 install_official_node(){
@@ -190,68 +146,31 @@ install_official_node(){
   tmp="$(mktemp)"
   curl -fL --retry 3 --connect-timeout 10 --max-time 60 "$UPSTREAM_URL" -o "$tmp"
   head -n1 "$tmp" | grep -q '^#!/bin/bash' || { rm -f "$tmp"; err "Получен некорректный upstream installer."; return 1; }
-  ver="$(grep -m1 '^SCRIPT_VERSION=' "$tmp" | cut -d'"' -f2 || true)"
-  sha="$(sha256sum "$tmp" | awk '{print $1}')"
-  ok "Официальный eGames installer: ${ver:-unknown}"
-  msg "SHA256: $sha"
+  ver="$(grep -m1 '^SCRIPT_VERSION=' "$tmp" | cut -d'"' -f2 || true)"; sha="$(sha256sum "$tmp" | awk '{print $1}')"
+  ok "Официальный eGames installer: ${ver:-unknown}"; msg "SHA256: $sha"
   warn "Откроется ОФИЦИАЛЬНОЕ меню eGames. Для ноды выбирай только: Install Remnawave Components -> Install node only -> Nginx."
-  warn "Наш скрипт не патчит и не подменяет код eGames и не меняет сервер панели."
+  warn "Kosmo не патчит и не подменяет eGames и не меняет сервер панели."
   read -rp "Нажми Enter для продолжения..." _
-  bash "$tmp"
-  rm -f "$tmp"
+  bash "$tmp"; rm -f "$tmp"
 }
 
-status_node(){
-  need_node
-  hr; msg "КОНТЕЙНЕРЫ"; docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
-  hr; msg "ВЕРСИИ"; docker logs remnanode 2>&1 | grep -aE 'SECRET_KEY OK|Remnawave Node v|XRay Core:' | tail -20 || true
-  hr; msg "ПОРТЫ"; ss -lntp | grep -E '(:2222|:443|:8444|:80)' || true
-  hr; msg "ДОМЕН"; echo "$(node_domain)"
-  hr; msg "UFW"; if need_cmd ufw; then ufw status; else echo "ufw не установлен"; fi
-}
+status_node(){ need_node; hr; msg "КОНТЕЙНЕРЫ"; docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'; hr; msg "ВЕРСИИ"; docker logs remnanode 2>&1 | grep -aE 'SECRET_KEY OK|Remnawave Node v|XRay Core:' | tail -20 || true; hr; msg "ПОРТЫ"; ss -lntp | grep -E '(:2222|:443|:8444|:80)' || true; hr; msg "ДОМЕН"; echo "$(node_domain)"; hr; msg "UFW"; if need_cmd ufw; then ufw status; else echo "ufw не установлен"; fi; }
 
-doctor_node(){
-  need_node
-  hr; msg "HOST"; echo "Public IPv4: $(public_ipv4)"; . /etc/os-release; echo "OS: ${PRETTY_NAME:-unknown}"; uname -a
-  hr; msg "COMPOSE"; (cd "$NODE_DIR" && docker compose config >/dev/null && ok "docker compose config: OK" || err "docker compose config: ERROR")
-  grep -nE 'image:|NODE_PORT=' "$NODE_DIR/docker-compose.yml" || true
-  hr; msg "NODE ENV"; docker inspect remnanode --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E 'NODE_PORT=|SECRET_KEY=' | sed -E 's#(SECRET_KEY=).*#\1***HIDDEN***#' || true
-  hr; msg "VERSIONS / SECRET"; docker logs remnanode 2>&1 | grep -aE 'SECRET_KEY|Remnawave Node v|XRay Core:' | tail -30 || true
-  hr; msg "PORTS"; ss -lntp | grep -E '(:2222|:443|:8444|:80)' || true
-  hr; msg "ROUTING"; ip route; ip rule
-  hr; msg "RECENT LOGS"; docker logs --tail=80 remnanode 2>&1 || true
-  warn "Норма: 2222=rw-node. 443/8444=rw-core появляются только после передачи соответствующего Xray Config Profile из панели."
-}
+doctor_node(){ need_node; hr; msg "HOST"; echo "Public IPv4: $(public_ipv4)"; . /etc/os-release; echo "OS: ${PRETTY_NAME:-unknown}"; uname -a; hr; msg "COMPOSE"; (cd "$NODE_DIR" && docker compose config >/dev/null && ok "docker compose config: OK" || err "docker compose config: ERROR"); grep -nE 'image:|NODE_PORT=' "$NODE_DIR/docker-compose.yml" || true; hr; msg "NODE ENV"; docker inspect remnanode --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -E 'NODE_PORT=|SECRET_KEY=' | sed -E 's#(SECRET_KEY=).*#\1***HIDDEN***#' || true; hr; msg "VERSIONS / SECRET"; docker logs remnanode 2>&1 | grep -aE 'SECRET_KEY|Remnawave Node v|XRay Core:' | tail -30 || true; hr; msg "PORTS"; ss -lntp | grep -E '(:2222|:443|:8444|:80)' || true; hr; msg "ROUTING"; ip route; ip rule; hr; msg "RECENT LOGS"; docker logs --tail=80 remnanode 2>&1 || true; warn "Норма: 2222=rw-node. 443/8444=rw-core появляются после передачи соответствующего Xray Config Profile из панели."; }
 
 restart_node(){ panel_guard; need_node; (cd "$NODE_DIR" && docker compose restart remnanode); sleep 8; status_node; }
-
-update_node(){
-  panel_guard; need_node
-  local b="$NODE_DIR/docker-compose.yml.backup-$(date +%F-%H%M%S)"
-  cp -a "$NODE_DIR/docker-compose.yml" "$b"
-  ok "Backup compose: $b"
-  (cd "$NODE_DIR" && docker compose config >/dev/null && docker compose pull remnanode && docker compose up -d --no-deps --force-recreate remnanode)
-  sleep 10; status_node
-}
-
-backup_node(){
-  need_node
-  local f="/root/remnanode-backup-$(date +%F-%H%M%S).tar.gz"
-  tar -C /opt -czf "$f" remnanode
-  ok "Backup создан: $f"
-}
-
+update_node(){ panel_guard; need_node; local b="$NODE_DIR/docker-compose.yml.backup-$(date +%F-%H%M%S)"; cp -a "$NODE_DIR/docker-compose.yml" "$b"; ok "Backup compose: $b"; (cd "$NODE_DIR" && docker compose config >/dev/null && docker compose pull remnanode && docker compose up -d --no-deps --force-recreate remnanode); sleep 10; status_node; }
+backup_node(){ need_node; local f="/root/remnanode-backup-$(date +%F-%H%M%S).tar.gz"; tar -C /opt -czf "$f" remnanode; ok "Backup создан: $f"; }
 logs_node(){ need_node; docker logs --tail=150 -f remnanode; }
 keys_only(){ need_node; local vals; vals="$(reality_values)"; echo "PrivateKey: $(sed -n '1p' <<<"$vals")"; echo "PublicKey/Password: $(sed -n '2p' <<<"$vals")"; echo "ShortID: $(sed -n '3p' <<<"$vals")"; }
 
-show_sources(){
-  cat <<'EOF'
+show_sources(){ cat <<'EOF'
 Основа и сверка синтаксиса:
-- eGamesAPI/remnawave-reverse-proxy — официальный/community installer Node + self-steal
-- remnawave/templates — актуальный VLESS RAW/TCP REALITY шаблон Remnawave
+- eGamesAPI/remnawave-reverse-proxy — актуальная установка Node + Nginx/self-steal
+- remnawave/templates — актуальный VLESS RAW REALITY шаблон Remnawave
 - XTLS/Xray-docs-next — REALITY, RAW, XHTTP, target/dest
-- XTLS/Xray-examples — VLESS TCP/RAW REALITY + Vision
-- XTLS/Xray-core discussions #4118 — XHTTP + REALITY примеры
+- XTLS/Xray-examples — VLESS RAW/TCP REALITY + Vision
+- XTLS/Xray-core discussion #4118 — XHTTP + REALITY примеры
 - TrulyInfinite/remnawave — Remnawave XHTTP + REALITY self-steal через /dev/shm/nginx.sock
 EOF
 }
@@ -278,20 +197,7 @@ menu(){
     hr
     read -rp "Выбери пункт: " ch
     case "$ch" in
-      1) install_official_node ;;
-      2) profile_xhttp ;;
-      3) profile_raw ;;
-      4) profile_both ;;
-      5) status_node ;;
-      6) doctor_node ;;
-      7) restart_node ;;
-      8) update_node ;;
-      9) logs_node ;;
-      10) keys_only ;;
-      11) backup_node ;;
-      12) show_sources ;;
-      0) exit 0 ;;
-      *) warn "Неверный пункт." ;;
+      1) install_official_node ;; 2) profile_xhttp ;; 3) profile_raw ;; 4) profile_both ;; 5) status_node ;; 6) doctor_node ;; 7) restart_node ;; 8) update_node ;; 9) logs_node ;; 10) keys_only ;; 11) backup_node ;; 12) show_sources ;; 0) exit 0 ;; *) warn "Неверный пункт." ;;
     esac
     echo; read -rp "Enter — вернуться в меню..." _ || true
   done
