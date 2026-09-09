@@ -1,4 +1,4 @@
-name: Validate shell scripts
+name: Validate single-file installer
 
 on:
   push:
@@ -12,7 +12,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Bash syntax check
-        run: |
-          bash -n install.sh
-          bash -n src/nginx/install_node.sh
-          bash -n bin/kosmo-node
+        run: bash -n install.sh
